@@ -1,59 +1,67 @@
-# versioning.yml
-
 name: Auto Versioning
 
 on:
   push:
-    branches: [ main ] # Roda sempre que houver um 'push' no branch 'main'
+    branches: [ main ]
 
 jobs:
-  auto-version:
-    permissions:
-      contents: write
+  # 1. Adicionamos a permissão de escrita
+  permissions:
+    contents: write
 
+  auto-version:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. Baixa o código, permitindo que o bot faça push
-    - name: 1. Checkout do Código
+    - name: 1. Checkout do código
       uses: actions/checkout@v3
       with:
-        token: ${{ secrets.GITHUB_TOKEN }} # Token necessário para o push de volta
+        token: ${{ secrets.GITHUB_TOKEN }}
 
-    # 2. Configura o usuário 'CI Bot' para os commits automáticos
-    - name: 2. Configurar Usuário Git
+    - name: 2. Configurar Git
       run: |
         git config --global user.name 'CI Bot'
         git config --global user.email 'ci-bot@github.com'
 
-    # 3. Calcula e salva a nova versão
+    # 3. Incrementar Versão
     - name: 3. Incrementar Versão
+      # Damos um "id" a este passo para referenciá-lo depois
+      id: increment_version
       run: |
-        # Verifica a mensagem do último commit para evitar um loop infinito de push
         LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
         if [[ "$LAST_COMMIT_MSG" == "CI: Incrementa versão para"* ]]; then
-          echo "Versão já incrementada pelo CI Bot. Saindo."
+          echo "Versão já incrementada por CI Bot. Saindo."
           exit 0
         fi
-
-        # Lógica de Incremento
+        
         CURRENT_VERSION=$(cat version.txt)
         BASE_VERSION=$(echo $CURRENT_VERSION | cut -d'v' -f2)
         MAJOR=$(echo $BASE_VERSION | cut -d'.' -f1)
         MINOR=$(echo $BASE_VERSION | cut -d'.' -f2)
         PATCH=$(echo $BASE_VERSION | cut -d'.' -f3)
-
-        # Incrementa o número PATCH
+        
         NEW_PATCH=$((PATCH + 1))
-
-        # Salva a nova versão no arquivo
+        
         NEW_VERSION="v${MAJOR}.${MINOR}.${NEW_PATCH}"
         echo "Versão atual: $CURRENT_VERSION -> Nova versão: $NEW_VERSION"
+        
         echo $NEW_VERSION > version.txt
+        
+        # 2. Esta linha "exporta" a variável para os próximos passos
+        echo "::set-output name=NEW_VERSION_STEP::$NEW_VERSION"
 
-    # 4. Faz o commit da nova versão e envia para o GitHub
+    # 4. Commitar e Fazer Push da Nova Versão
     - name: 4. Commitar e Fazer Push da Nova Versão
       run: |
+        # 3. Usamos a variável exportada do passo anterior
+        NEW_VERSION_FROM_STEP="${{ steps.increment_version.outputs.NEW_VERSION_STEP }}"
+        
+        # Verificamos se a variável não está vazia (caso o passo 3 tenha saído)
+        if [ -z "$NEW_VERSION_FROM_STEP" ]; then
+          echo "Nenhuma nova versão para commitar. Saindo."
+          exit 0
+        fi
+        
         git add version.txt
-        git commit -m "CI: Incrementa versão para $NEW_VERSION"
+        git commit -m "CI: Incrementa versão para $NEW_VERSION_FROM_STEP"
         git push origin main

@@ -5,11 +5,13 @@ on:
     branches: [ main ]
 
 jobs:
-  # 1. Adicionamos a permissão de escrita
-  permissions:
-    contents: write
-
   auto-version:
+    # 
+    # CORREÇÃO AQUI: A permissão foi movida PARA DENTRO do job 'auto-version'
+    # 
+    permissions:
+      contents: write 
+    
     runs-on: ubuntu-latest
 
     steps:
@@ -25,8 +27,7 @@ jobs:
 
     # 3. Incrementar Versão
     - name: 3. Incrementar Versão
-      # Damos um "id" a este passo para referenciá-lo depois
-      id: increment_version
+      id: increment_version 
       run: |
         LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
         if [[ "$LAST_COMMIT_MSG" == "CI: Incrementa versão para"* ]]; then
@@ -47,16 +48,16 @@ jobs:
         
         echo $NEW_VERSION > version.txt
         
-        # 2. Esta linha "exporta" a variável para os próximos passos
-        echo "::set-output name=NEW_VERSION_STEP::$NEW_VERSION"
+        # Esta linha "exporta" a variável para os próximos passos (sintaxe moderna)
+        echo "NEW_VERSION_STEP=$NEW_VERSION" >> $GITHUB_OUTPUT
 
     # 4. Commitar e Fazer Push da Nova Versão
     - name: 4. Commitar e Fazer Push da Nova Versão
       run: |
-        # 3. Usamos a variável exportada do passo anterior
+        # Usamos a variável exportada do passo anterior
         NEW_VERSION_FROM_STEP="${{ steps.increment_version.outputs.NEW_VERSION_STEP }}"
         
-        # Verificamos se a variável não está vazia (caso o passo 3 tenha saído)
+        # Verificamos se a variável não está vazia
         if [ -z "$NEW_VERSION_FROM_STEP" ]; then
           echo "Nenhuma nova versão para commitar. Saindo."
           exit 0
